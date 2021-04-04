@@ -6,8 +6,9 @@ public class lesson3 {
         integerArr();
         increaseArray();
         diagonalArray();
-        int[] result = twoArguments(15, 8);
+        int[] result = twoArguments(4, 8);
         System.out.println(Arrays.toString(result));
+        minAndMaxElementOfArray();
     }
 
     //№1
@@ -68,5 +69,21 @@ public class lesson3 {
             array[i] = initialValue;
         }
         return array;
+    }
+    //№6
+    public static void minAndMaxElementOfArray() {
+        int[] array = {5, 5, 3, -2, 11, 4, 5, 2, 4, -8, 9, 1};
+        int min = array[0];
+        int max = array[0];
+        for (int elm : array) {
+            if (elm < min) {
+                min = elm;
+            }
+            if (elm > max) {
+                max = elm;
+            }
+        }
+        System.out.println("minimum: " + min);
+        System.out.println("maximum: " + max);
     }
 }
