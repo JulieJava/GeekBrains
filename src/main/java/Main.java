@@ -1,78 +1,80 @@
-import com.fasterxml.jackson.databind.ObjectMapper;
+import api.YandexApi;
+import exception.YandexApiException;
+import model.City;
 import model.Weather;
-import okhttp3.HttpUrl;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import references.References;
+import repository.DataBaseRepository;
 
-import java.io.IOException;
-import java.util.ArrayList;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.List;
-import java.util.Map;
 
 public class Main {
-    private final static String yandexKey = "93c656cc-fd9e-4f4f-8e74-9d7ba59a0987";
-    private final static String yandexApiKeyHeaderName = "X-Yandex-API-Key";
-    private final static String yandexApiUrl = "https://api.weather.yandex.ru/v2/forecast";
-    private final static String lat = "59.939079";
-    private final static String lon = "30.315766";
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
+        Class.forName("org.sqlite.JDBC");
+        DataBaseRepository repository = new DataBaseRepository();
+        repository.initializeTables();
 
-        OkHttpClient client = new OkHttpClient();
-        ObjectMapper mapper = new ObjectMapper();
+        YandexApi yandexApi = new YandexApi();
 
-        HttpUrl url = new HttpUrl.Builder()
-                .scheme("https")
-                .host("api.weather.yandex.ru")
-                .addPathSegment("v2")
-                .addPathSegment("forecast")
-                .addQueryParameter("lat", lat)
-                .addQueryParameter("lon", lon)
-                .addQueryParameter("limit", "5")
-                .addQueryParameter("lang", "ru_RU")
-                .addQueryParameter("extra", "false")
-                .addQueryParameter("hours", "false")
-                .build();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        boolean isRunning = true;
+        while (isRunning) {
+            System.out.println("Введите команду: 'обновить', 'показать', 'завершить'");
+            // ждем команду от пользователя
+            String userRequest = reader.readLine();
 
-        Request request = new Request.Builder()
-                .url(url)
-                .method("GET", null)
-                .addHeader(yandexApiKeyHeaderName, yandexKey)
-                .build();
-        Response response = client.newCall(request).execute();
+            switch (userRequest) {
+                case "обновить": {
+                    try {
+                        repository.cleanDb();
+                        for (City city : City.values()) {
+                            List<Weather> weathers = yandexApi.getWeather(city);
+                            repository.saveWeather(weathers);
+                        }
+                        System.out.println("Погода успешно сохранена в базу данных");
+                    } catch (YandexApiException e) {
+                        System.out.println(e.getMessage());
+                    }
+                    break;
+                }
 
-        if (response.code() == 200) {
-            Map<String, Object> responseMap = mapper.readValue(response.body().string(), Map.class);
-            Map geoObject = (Map) responseMap.get("geo_object");
-            Map locality = (Map) geoObject.get("locality");
+                case "показать": {
+                    System.out.println("Введите город :");
+                    String city = reader.readLine();
+                    List<Weather> weatherFromDb = null;
 
-            String city = locality.get("name").toString();
+                    for (City cityEnum : City.values()) {
+                        if(city.equals(cityEnum.getName())) {
+                            weatherFromDb = repository.getWeatherFromDb(cityEnum);
+                            break;
+                        }
+                    }
 
-            List dataList = (ArrayList) responseMap.get("forecasts");
-
-
-            for (Object oneDayData : dataList) {
-                Map oneDayMap = (Map) oneDayData;
-                String date = oneDayMap.get("date").toString();
-
-                Map parts = (Map) oneDayMap.get("parts");
-                Map night = (Map) parts.get("night");
-                int nightTemperature = Integer.parseInt(night.get("temp_avg").toString());
-                String nightConditionKey = night.get("condition").toString();
-
-                Map day = (Map) parts.get("day");
-                int dayTemperature = Integer.parseInt(day.get("temp_avg").toString());
-                String dayConditionKey = day.get("condition").toString();
-
-                Weather weather = new Weather(city, date, nightTemperature, dayTemperature,
-                        References.yandexApiConditions.getOrDefault(nightConditionKey, nightConditionKey),
-                        References.yandexApiConditions.getOrDefault(dayConditionKey, dayConditionKey));
-                System.out.println(weather);
+                    if (weatherFromDb != null) {
+                        if (weatherFromDb.size() == 0) {
+                            System.out.println("Записей нет");
+                        } else {
+                            for (Weather weather : weatherFromDb) {
+                                System.out.println(weather);
+                            }
+                        }
+                    } else {
+                        System.out.println("Программа не знает такого города");
+                    }
+                    break;
+                }
+                case "завершить": {
+                    isRunning = false;
+                    break;
+                }
+                default: {
+                    System.out.println("такой команды нет");
+                }
             }
-        } else {
-            System.out.println("Не получилось. Вернулся код:" + response.code());
         }
+
+
+        System.out.println("Программа завершена");
     }
 }
